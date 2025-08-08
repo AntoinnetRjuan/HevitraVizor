@@ -1,98 +1,143 @@
-import sys
 import os
+import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import sys
+import pandas as pd
+import matplotlib.pyplot as plt
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QPushButton, QFileDialog, QLabel, QComboBox, QTextEdit, QStackedWidget,
+    QListWidget, QListWidgetItem, QSizePolicy
+)
+from PyQt5.QtGui import QIcon, QPixmap
+from PyQt5.QtCore import Qt
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
-from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QLabel, QFileDialog, QVBoxLayout, QFrame, QTextEdit, QComboBox
-from PyQt5.QtGui import QFont
-from backend.data_loader import load_file
-from backend.data_analysis import basic_summary
-from backend.visualization import plot_histogram
 
-class CuteDataAnalyzer(QWidget):
+class DataAnalyzer(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Cute Data Analyzer")
-        self.setFixedSize(500, 500)
-        self.setStyleSheet("background-color: #FFF5F5;")
+        self.setWindowTitle("Data Analysis & Visualization App")
+        self.setGeometry(100, 100, 1000, 600)
+        self.setStyleSheet("background-color: #2e2e2e; color: white;")
 
-        self.layout = QVBoxLayout()
+        self.data = None
 
-        self.title = QLabel("\ud83c\udf38 Cute Data Analyzer")
-        self.title.setFont(QFont("Poppins", 20))
-        self.title.setStyleSheet("color: #FF69B4; text-align: center;")
-        self.layout.addWidget(self.title)
+        self.initUI()
 
-        self.frame = QFrame()
-        self.frame.setStyleSheet("background-color: #FFFFFF; border-radius: 15px; border: 1px solid #DDD;")
-        self.frame.setFixedHeight(200)
-        self.frameLayout = QVBoxLayout(self.frame)
+    def initUI(self):
+        main_layout = QHBoxLayout()
 
-        self.infoBox = QTextEdit()
-        self.infoBox.setReadOnly(True)
-        self.infoBox.setStyleSheet("border: none; font-size: 14px; color: #555;")
-        self.frameLayout.addWidget(self.infoBox)
+        # Menu
+        self.menu = QListWidget()
+        self.menu.setFixedWidth(200)
+        self.menu.setStyleSheet("background-color: #3c3c3c; color: white;")
+        for name, icon in [("Home", "home.png"), ("Analysis", "analysis.png"), ("Visualization", "chart.png")]:
+            item = QListWidgetItem(QIcon(icon), name)
+            self.menu.addItem(item)
+        self.menu.currentRowChanged.connect(self.display_page)
 
-        self.layout.addWidget(self.frame)
+        # Pages
+        self.stack = QStackedWidget()
+        self.stack.addWidget(self.home_page())
+        self.stack.addWidget(self.analysis_page())
+        self.stack.addWidget(self.visualization_page())
 
-        self.loadButton = QPushButton("\ud83d\udcc2 Import Data File")
-        self.loadButton.setStyleSheet("""
-            QPushButton {
-                background-color: #FFB6C1;
-                border-radius: 12px;
-                color: white;
-                font-size: 16px;
-                padding: 10px;
-            }
-            QPushButton:hover {
-                background-color: #FF69B4;
-            }
-        """)
-        self.loadButton.clicked.connect(self.load_data)
-        self.layout.addWidget(self.loadButton)
+        main_layout.addWidget(self.menu)
+        main_layout.addWidget(self.stack)
 
-        self.columnSelector = QComboBox()
-        self.columnSelector.setStyleSheet("""
-            QComboBox {
-                background-color: #FFFFFF;
-                border: 1px solid #DDD;
-                border-radius: 8px;
-                padding: 5px;
-                font-size: 14px;
-            }
-        """)
-        self.columnSelector.currentIndexChanged.connect(self.plot_selected_column)
-        self.layout.addWidget(self.columnSelector)
+        container = QWidget()
+        container.setLayout(main_layout)
+        self.setCentralWidget(container)
 
-        self.setLayout(self.layout)
-        self.df = None
+    def home_page(self):
+        page = QWidget()
+        layout = QVBoxLayout()
 
-    def load_data(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "Open Data File", "", "CSV Files (*.csv);;Excel Files (*.xlsx)")
+        welcome = QLabel("Bienvenue dans l'application d'analyse de données !")
+        welcome.setAlignment(Qt.AlignCenter)
+        welcome.setStyleSheet("font-size: 22px; font-weight: bold; margin-top: 20px;")
+
+        image = QLabel()
+        pixmap = QPixmap("data.png").scaledToWidth(150)
+        image.setPixmap(pixmap)
+        image.setAlignment(Qt.AlignCenter)
+
+        layout.addWidget(image)
+        layout.addWidget(welcome)
+        page.setLayout(layout)
+        return page
+
+    def analysis_page(self):
+        self.analysis_page_widget = QWidget()
+        layout = QVBoxLayout()
+
+        self.load_btn = QPushButton("Charger un fichier Excel/CSV")
+        self.load_btn.clicked.connect(self.load_file)
+        layout.addWidget(self.load_btn)
+
+        self.analysis_text = QTextEdit()
+        self.analysis_text.setReadOnly(True)
+        layout.addWidget(self.analysis_text)
+
+        self.analysis_page_widget.setLayout(layout)
+        return self.analysis_page_widget
+
+    def visualization_page(self):
+        self.visualization_page_widget = QWidget()
+        layout = QVBoxLayout()
+
+        self.column_selector = QComboBox()
+        self.column_selector.currentTextChanged.connect(self.plot_histogram)
+        layout.addWidget(self.column_selector)
+
+        self.canvas = FigureCanvas(plt.Figure())
+        layout.addWidget(self.canvas)
+
+        self.visualization_page_widget.setLayout(layout)
+        return self.visualization_page_widget
+
+    def display_page(self, index):
+        self.stack.setCurrentIndex(index)
+
+    def load_file(self):
+        options = QFileDialog.Options()
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Ouvrir un fichier", "", "CSV Files (*.csv);;Excel Files (*.xlsx *.xls)", options=options
+        )
         if file_path:
-            try:
-                self.df = load_file(file_path)
-                summary = basic_summary(self.df)
-                summary_text = f"Rows: {summary['rows']}\nColumns: {summary['columns']}\nMissing Values: {summary['missing_values']}\n\nColumn Types:\n"
-                for col, dtype in summary['column_types'].items():
-                    summary_text += f"- {col}: {dtype}\n"
-                self.infoBox.setText(summary_text)
-                self.populate_columns()
-            except Exception as e:
-                self.infoBox.setText(f"Error loading file:\n{str(e)}")
+            if file_path.endswith('.csv'):
+                self.data = pd.read_csv(file_path)
+            else:
+                self.data = pd.read_excel(file_path)
 
-    def populate_columns(self):
-        self.columnSelector.clear()
-        if self.df is not None:
-            numeric_cols = self.df.select_dtypes(include=['number']).columns
-            self.columnSelector.addItems(numeric_cols)
+            self.perform_analysis()
+            self.column_selector.clear()
+            self.column_selector.addItems(self.data.select_dtypes(include='number').columns)
 
-    def plot_selected_column(self):
-        column = self.columnSelector.currentText()
-        if column and self.df is not None:
-            plot_histogram(self.df, column)
+    def perform_analysis(self):
+        if self.data is not None:
+            text = f"Shape: {self.data.shape}\n\n"
+            text += f"Colonnes:\n{list(self.data.columns)}\n\n"
+            text += f"Types de données:\n{self.data.dtypes}\n\n"
+            text += f"Valeurs manquantes:\n{self.data.isnull().sum()}\n\n"
+            text += f"Statistiques descriptives:\n{self.data.describe()}"
+
+            self.analysis_text.setText(text)
+
+    def plot_histogram(self, column):
+        if self.data is not None and column:
+            self.canvas.figure.clear()
+            ax = self.canvas.figure.add_subplot(111)
+            ax.hist(self.data[column].dropna(), bins=20, color='skyblue', edgecolor='black')
+            ax.set_title(f"Histogramme de {column}")
+            ax.set_xlabel(column)
+            ax.set_ylabel("Fréquence")
+            self.canvas.draw()
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    window = CuteDataAnalyzer()
+    window = DataAnalyzer()
     window.show()
     sys.exit(app.exec_())

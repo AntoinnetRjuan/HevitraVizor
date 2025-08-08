@@ -1,7 +1,17 @@
-def basic_summary(df):
-    return {
-        "rows": df.shape[0],
-        "columns": df.shape[1],
-        "missing_values": df.isnull().sum().sum(),
-        "column_types": df.dtypes.astype(str).to_dict()
-    }
+import streamlit as st
+# Fonction d'analyse
+def analyse_data(df):
+    st.subheader("Aperçu des données")
+    st.dataframe(df.head())
+
+    st.subheader("Informations générales")
+    st.write("Dimensions:", df.shape)
+
+    st.write("\nColonnes et types:")
+    st.write(df.dtypes)
+
+    st.write("\nValeurs manquantes:")
+    st.write(df.isnull().sum())
+
+    st.subheader("Statistiques descriptives")
+    st.write(df.describe())
