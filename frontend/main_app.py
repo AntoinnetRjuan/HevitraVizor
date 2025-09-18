@@ -1,143 +1,90 @@
-import os
-import sys
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-import sys
+import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QFileDialog, QLabel, QComboBox, QTextEdit, QStackedWidget,
-    QListWidget, QListWidgetItem, QSizePolicy
-)
-from PyQt5.QtGui import QIcon, QPixmap
-from PyQt5.QtCore import Qt
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
 
-class DataAnalyzer(QMainWindow):
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("Data Analysis & Visualization App")
-        self.setGeometry(100, 100, 1000, 600)
-        self.setStyleSheet("background-color: #2e2e2e; color: white;")
 
-        self.data = None
+# --- Streamlit App ---
+st.set_page_config(page_title="HevitraVizor+", layout="wide", page_icon="📊")
 
-        self.initUI()
+st.markdown("""
+<style>
+.main {
+    background-color: #2e2e2e;
+    color: white;
+}
+.stApp {
+    background-color: #2e2e2e;
+}
+</style>
+""", unsafe_allow_html=True)
 
-    def initUI(self):
-        main_layout = QHBoxLayout()
+st.title("📊 HevitraVizor+")
+st.markdown("Bienvenue dans l'application d'analyse de données d'entreprise !")
 
-        # Menu
-        self.menu = QListWidget()
-        self.menu.setFixedWidth(200)
-        self.menu.setStyleSheet("background-color: #3c3c3c; color: white;")
-        for name, icon in [("Home", "home.png"), ("Analysis", "analysis.png"), ("Visualization", "chart.png")]:
-            item = QListWidgetItem(QIcon(icon), name)
-            self.menu.addItem(item)
-        self.menu.currentRowChanged.connect(self.display_page)
+uploaded_file = st.sidebar.file_uploader("Charger un fichier Excel ou CSV", type=["csv", "xlsx", "xls"])
+data = None
 
-        # Pages
-        self.stack = QStackedWidget()
-        self.stack.addWidget(self.home_page())
-        self.stack.addWidget(self.analysis_page())
-        self.stack.addWidget(self.visualization_page())
+if uploaded_file:
+    try:
+        if uploaded_file.name.endswith(".csv"):
+            data = pd.read_csv(uploaded_file)
+        else:
+            data = pd.read_excel(uploaded_file)
+    except Exception as e:
+        st.error(f"Erreur lors du chargement du fichier : {e}")
 
-        main_layout.addWidget(self.menu)
-        main_layout.addWidget(self.stack)
+if data is not None:
+    st.subheader("Aperçu des données")
+    st.dataframe(data.head(20))
 
-        container = QWidget()
-        container.setLayout(main_layout)
-        self.setCentralWidget(container)
+    st.subheader("Analyse rapide")
+    st.write(f"**Dimensions :** {data.shape}")
+    st.write(f"**Colonnes :** {list(data.columns)}")
+    st.write("**Types de données :**")
+    st.write(data.dtypes)
+    st.write("**Valeurs manquantes :**")
+    st.write(data.isnull().sum())
+    st.write("**Statistiques descriptives :**")
+    st.write(data.describe())
 
-    def home_page(self):
-        page = QWidget()
-        layout = QVBoxLayout()
+    st.subheader("Visualisation interactive")
+    plot_type = st.selectbox("Type de graphique :", ["Histogramme", "Boîte à moustaches", "Nuage de points", "Camembert"])
+    numeric_cols = data.select_dtypes(include='number').columns.tolist()
+    cat_cols = data.select_dtypes(include=['object', 'category']).columns.tolist()
 
-        welcome = QLabel("Bienvenue dans l'application d'analyse de données !")
-        welcome.setAlignment(Qt.AlignCenter)
-        welcome.setStyleSheet("font-size: 22px; font-weight: bold; margin-top: 20px;")
-
-        image = QLabel()
-        pixmap = QPixmap("data.png").scaledToWidth(150)
-        image.setPixmap(pixmap)
-        image.setAlignment(Qt.AlignCenter)
-
-        layout.addWidget(image)
-        layout.addWidget(welcome)
-        page.setLayout(layout)
-        return page
-
-    def analysis_page(self):
-        self.analysis_page_widget = QWidget()
-        layout = QVBoxLayout()
-
-        self.load_btn = QPushButton("Charger un fichier Excel/CSV")
-        self.load_btn.clicked.connect(self.load_file)
-        layout.addWidget(self.load_btn)
-
-        self.analysis_text = QTextEdit()
-        self.analysis_text.setReadOnly(True)
-        layout.addWidget(self.analysis_text)
-
-        self.analysis_page_widget.setLayout(layout)
-        return self.analysis_page_widget
-
-    def visualization_page(self):
-        self.visualization_page_widget = QWidget()
-        layout = QVBoxLayout()
-
-        self.column_selector = QComboBox()
-        self.column_selector.currentTextChanged.connect(self.plot_histogram)
-        layout.addWidget(self.column_selector)
-
-        self.canvas = FigureCanvas(plt.Figure())
-        layout.addWidget(self.canvas)
-
-        self.visualization_page_widget.setLayout(layout)
-        return self.visualization_page_widget
-
-    def display_page(self, index):
-        self.stack.setCurrentIndex(index)
-
-    def load_file(self):
-        options = QFileDialog.Options()
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "Ouvrir un fichier", "", "CSV Files (*.csv);;Excel Files (*.xlsx *.xls)", options=options
-        )
-        if file_path:
-            if file_path.endswith('.csv'):
-                self.data = pd.read_csv(file_path)
-            else:
-                self.data = pd.read_excel(file_path)
-
-            self.perform_analysis()
-            self.column_selector.clear()
-            self.column_selector.addItems(self.data.select_dtypes(include='number').columns)
-
-    def perform_analysis(self):
-        if self.data is not None:
-            text = f"Shape: {self.data.shape}\n\n"
-            text += f"Colonnes:\n{list(self.data.columns)}\n\n"
-            text += f"Types de données:\n{self.data.dtypes}\n\n"
-            text += f"Valeurs manquantes:\n{self.data.isnull().sum()}\n\n"
-            text += f"Statistiques descriptives:\n{self.data.describe()}"
-
-            self.analysis_text.setText(text)
-
-    def plot_histogram(self, column):
-        if self.data is not None and column:
-            self.canvas.figure.clear()
-            ax = self.canvas.figure.add_subplot(111)
-            ax.hist(self.data[column].dropna(), bins=20, color='skyblue', edgecolor='black')
-            ax.set_title(f"Histogramme de {column}")
-            ax.set_xlabel(column)
-            ax.set_ylabel("Fréquence")
-            self.canvas.draw()
-
-
-if __name__ == '__main__':
-    app = QApplication(sys.argv)
-    window = DataAnalyzer()
-    window.show()
-    sys.exit(app.exec_())
+    if plot_type == "Histogramme" and numeric_cols:
+        col = st.selectbox("Colonne numérique :", numeric_cols)
+        fig, ax = plt.subplots()
+        ax.hist(data[col].dropna(), bins=20, color='skyblue', edgecolor='black')
+        ax.set_title(f"Histogramme de {col}")
+        ax.set_xlabel(col)
+        ax.set_ylabel("Fréquence")
+        st.pyplot(fig)
+    elif plot_type == "Boîte à moustaches" and numeric_cols:
+        col = st.selectbox("Colonne numérique :", numeric_cols)
+        fig, ax = plt.subplots()
+        ax.boxplot(data[col].dropna())
+        ax.set_title(f"Boîte à moustaches de {col}")
+        ax.set_xlabel(col)
+        st.pyplot(fig)
+    elif plot_type == "Nuage de points" and len(numeric_cols) >= 2:
+        x_col = st.selectbox("Axe X :", numeric_cols, key="x_scatter")
+        y_col = st.selectbox("Axe Y :", [c for c in numeric_cols if c != x_col], key="y_scatter")
+        fig, ax = plt.subplots()
+        ax.scatter(data[x_col], data[y_col], alpha=0.7, color='teal')
+        ax.set_title(f"Nuage de points : {x_col} vs {y_col}")
+        ax.set_xlabel(x_col)
+        ax.set_ylabel(y_col)
+        st.pyplot(fig)
+    elif plot_type == "Camembert" and cat_cols:
+        col = st.selectbox("Colonne catégorielle :", cat_cols)
+        pie_data = data[col].value_counts()
+        fig, ax = plt.subplots()
+        ax.pie(pie_data, labels=pie_data.index, autopct='%1.1f%%', startangle=90)
+        ax.set_title(f"Répartition de {col}")
+        st.pyplot(fig)
+    else:
+        st.info("Aucune colonne adaptée à ce type de graphique.")
+else:
+    st.info("Veuillez charger un fichier pour commencer l'analyse.")
