@@ -1,10 +1,16 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import io
+import os
+
+# Gestion des imports optionnels pour Plotly
+try:
+    import plotly.express as px
+    import plotly.graph_objects as go
+    PLOTLY_AVAILABLE = True
+except ImportError:
+    PLOTLY_AVAILABLE = False
 
 # --- Configuration de la page ---
 st.set_page_config(
@@ -58,12 +64,6 @@ st.markdown("""
         margin-bottom: 1.5rem;
         box-shadow: 0 2px 12px rgba(0,0,0,0.06);
         border: 1px solid #e9ecef;
-        transition: all 0.3s ease;
-    }
-    
-    .modern-card:hover {
-        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-        transform: translateY(-2px);
     }
     
     .card-title {
@@ -76,29 +76,6 @@ st.markdown("""
         gap: 10px;
         padding-bottom: 0.8rem;
         border-bottom: 2px solid #f1f3f4;
-    }
-    
-    /* Sidebar doux */
-    .css-1d391kg {
-        background: linear-gradient(180deg, #2c3e50 0%, #34495e 100%);
-    }
-    
-    /* Boutons élégants */
-    .stButton button {
-        background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
-        color: white;
-        border: none;
-        border-radius: 8px;
-        padding: 0.6rem 1.5rem;
-        font-weight: 500;
-        transition: all 0.3s ease;
-        font-size: 0.9rem;
-    }
-    
-    .stButton button:hover {
-        background: linear-gradient(135deg, #2980b9 0%, #2471a3 100%);
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
     }
     
     /* Métriques douces */
@@ -125,27 +102,16 @@ st.markdown("""
         font-weight: 400;
     }
     
-    /* Onglets personnalisés */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-    }
-    
-    .stTabs [data-baseweb="tab"] {
-        background: #e9ecef;
-        border-radius: 8px 8px 0 0;
-        padding: 10px 20px;
-        font-weight: 500;
-    }
-    
-    .stTabs [aria-selected="true"] {
-        background: #3498db;
+    /* Boutons élégants */
+    .stButton button {
+        background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
         color: white;
-    }
-    
-    /* Amélioration des sélecteurs */
-    .stSelectbox, .stMultiselect {
-        background: white;
-        border-radius: 6px;
+        border: none;
+        border-radius: 8px;
+        padding: 0.6rem 1.5rem;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        font-size: 0.9rem;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -153,7 +119,12 @@ st.markdown("""
 # --- Header professionnel ---
 col1, col2 = st.columns([1, 10])
 with col1:
-    st.image("frontend/assets/logo.png", width=80)
+    # Logo simplifié avec emoji pour éviter les erreurs de fichier
+    st.markdown("""
+    <div style="text-align: center; padding: 10px;">
+        <div style="font-size: 3rem;">📊</div>
+    </div>
+    """, unsafe_allow_html=True)
 
 with col2:
     st.markdown("""
@@ -166,7 +137,7 @@ with col2:
 # --- Sidebar épuré ---
 with st.sidebar:
     st.markdown("""
-    <div style='text-align: center; margin-bottom: 2rem; padding: 1rem; background: rgba(255,255,255,0.1); border-radius: 10px;'>
+    <div style='text-align: center; margin-bottom: 2rem; padding: 1rem; background: #2c3e50; border-radius: 10px;'>
         <h3 style='color: white; margin: 0;'>📊</h3>
         <h4 style='color: white; margin: 0.5rem 0;'>Navigation</h4>
     </div>
@@ -272,80 +243,97 @@ if uploaded_file is not None:
                 filtered_data = filtered_data[(filtered_data[col] >= val_range[0]) & (filtered_data[col] <= val_range[1])]
         
         st.success(f"**📊 Données filtrées :** {filtered_data.shape[0]} lignes × {filtered_data.shape[1]} colonnes")
+        st.dataframe(filtered_data.head(10), use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
         # --- Visualisations interactives ---
-        st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-        st.markdown('<div class="card-title">📈 Visualisations interactives</div>', unsafe_allow_html=True)
-        
-        viz_col1, viz_col2 = st.columns([1, 2])
-        
-        with viz_col1:
-            plot_type = st.selectbox("Type de visualisation :", 
-                                   ["Histogramme", "Boxplot", "Scatter Plot", "Line Chart", "Bar Chart", "Pie Chart"])
+        if PLOTLY_AVAILABLE:
+            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+            st.markdown('<div class="card-title">📈 Visualisations interactives</div>', unsafe_allow_html=True)
             
-            numeric_cols = filtered_data.select_dtypes(include='number').columns.tolist()
-            cat_cols = filtered_data.select_dtypes(include=['object', 'category']).columns.tolist()
+            viz_col1, viz_col2 = st.columns([1, 2])
             
-            if plot_type in ["Histogramme", "Boxplot"] and numeric_cols:
-                selected_col = st.selectbox("Colonne numérique :", numeric_cols)
-            elif plot_type == "Scatter Plot" and len(numeric_cols) >= 2:
-                x_col = st.selectbox("Axe X :", numeric_cols)
-                y_col = st.selectbox("Axe Y :", [c for c in numeric_cols if c != x_col])
-            elif plot_type == "Pie Chart" and cat_cols:
-                selected_col = st.selectbox("Colonne catégorielle :", cat_cols)
-        
-        with viz_col2:
-            try:
-                # Couleurs douces pour les graphiques
-                soft_colors = ['#3498db', '#2ecc71', '#e74c3c', '#f39c12', '#9b59b6', '#1abc9c']
+            with viz_col1:
+                plot_type = st.selectbox("Type de visualisation :", 
+                                       ["Histogramme", "Boxplot", "Scatter Plot", "Line Chart", "Bar Chart", "Pie Chart"])
                 
-                if plot_type == "Histogramme" and numeric_cols:
-                    fig = px.histogram(filtered_data, x=selected_col, 
-                                     title=f"Distribution de {selected_col}",
-                                     color_discrete_sequence=['#3498db'])
-                    fig.update_layout(plot_bgcolor='white', paper_bgcolor='white')
-                    st.plotly_chart(fig, use_container_width=True)
+                numeric_cols = filtered_data.select_dtypes(include='number').columns.tolist()
+                cat_cols = filtered_data.select_dtypes(include=['object', 'category']).columns.tolist()
                 
-                elif plot_type == "Boxplot" and numeric_cols:
-                    fig = px.box(filtered_data, y=selected_col, 
-                               title=f"Boxplot de {selected_col}",
-                               color_discrete_sequence=['#2ecc71'])
-                    fig.update_layout(plot_bgcolor='white', paper_bgcolor='white')
-                    st.plotly_chart(fig, use_container_width=True)
-                
+                if plot_type in ["Histogramme", "Boxplot"] and numeric_cols:
+                    selected_col = st.selectbox("Colonne numérique :", numeric_cols)
                 elif plot_type == "Scatter Plot" and len(numeric_cols) >= 2:
-                    fig = px.scatter(filtered_data, x=x_col, y=y_col,
-                                   title=f"{x_col} vs {y_col}",
-                                   color_discrete_sequence=['#e74c3c'])
-                    fig.update_layout(plot_bgcolor='white', paper_bgcolor='white')
-                    st.plotly_chart(fig, use_container_width=True)
-                
+                    x_col = st.selectbox("Axe X :", numeric_cols)
+                    y_col = st.selectbox("Axe Y :", [c for c in numeric_cols if c != x_col])
                 elif plot_type == "Pie Chart" and cat_cols:
-                    pie_data = filtered_data[selected_col].value_counts().head(10)
-                    fig = px.pie(values=pie_data.values, names=pie_data.index,
-                               title=f"Répartition de {selected_col}",
-                               color_discrete_sequence=soft_colors)
-                    fig.update_layout(plot_bgcolor='white', paper_bgcolor='white')
-                    st.plotly_chart(fig, use_container_width=True)
-                
-            except Exception as e:
-                st.warning("Impossible de générer la visualisation avec les paramètres sélectionnés.")
-        
-        st.markdown('</div>', unsafe_allow_html=True)
+                    selected_col = st.selectbox("Colonne catégorielle :", cat_cols)
+            
+            with viz_col2:
+                try:
+                    # Couleurs douces pour les graphiques
+                    soft_colors = ['#3498db', '#2ecc71', '#e74c3c', '#f39c12', '#9b59b6', '#1abc9c']
+                    
+                    if plot_type == "Histogramme" and numeric_cols:
+                        fig = px.histogram(filtered_data, x=selected_col, 
+                                         title=f"Distribution de {selected_col}",
+                                         color_discrete_sequence=['#3498db'])
+                        fig.update_layout(plot_bgcolor='white', paper_bgcolor='white')
+                        st.plotly_chart(fig, use_container_width=True)
+                    
+                    elif plot_type == "Boxplot" and numeric_cols:
+                        fig = px.box(filtered_data, y=selected_col, 
+                                   title=f"Boxplot de {selected_col}",
+                                   color_discrete_sequence=['#2ecc71'])
+                        fig.update_layout(plot_bgcolor='white', paper_bgcolor='white')
+                        st.plotly_chart(fig, use_container_width=True)
+                    
+                    elif plot_type == "Scatter Plot" and len(numeric_cols) >= 2:
+                        fig = px.scatter(filtered_data, x=x_col, y=y_col,
+                                       title=f"{x_col} vs {y_col}",
+                                       color_discrete_sequence=['#e74c3c'])
+                        fig.update_layout(plot_bgcolor='white', paper_bgcolor='white')
+                        st.plotly_chart(fig, use_container_width=True)
+                    
+                    elif plot_type == "Pie Chart" and cat_cols:
+                        pie_data = filtered_data[selected_col].value_counts().head(10)
+                        fig = px.pie(values=pie_data.values, names=pie_data.index,
+                                   title=f"Répartition de {selected_col}",
+                                   color_discrete_sequence=soft_colors)
+                        fig.update_layout(plot_bgcolor='white', paper_bgcolor='white')
+                        st.plotly_chart(fig, use_container_width=True)
+                    
+                except Exception as e:
+                    st.warning("Impossible de générer la visualisation avec les paramètres sélectionnés.")
+            
+            st.markdown('</div>', unsafe_allow_html=True)
 
         # --- Analyse des corrélations ---
+        numeric_cols = filtered_data.select_dtypes(include='number').columns.tolist()
         if len(numeric_cols) >= 2:
             st.markdown('<div class="modern-card">', unsafe_allow_html=True)
             st.markdown('<div class="card-title">🔗 Matrice de corrélation</div>', unsafe_allow_html=True)
             
             corr_matrix = filtered_data[numeric_cols].corr()
-            fig = px.imshow(corr_matrix, 
-                          title="Matrice de corrélation",
-                          color_continuous_scale='Blues',
-                          aspect='auto')
-            fig.update_layout(plot_bgcolor='white', paper_bgcolor='white')
-            st.plotly_chart(fig, use_container_width=True)
+            
+            if PLOTLY_AVAILABLE:
+                fig = px.imshow(corr_matrix, 
+                              title="Matrice de corrélation",
+                              color_continuous_scale='Blues',
+                              aspect='auto')
+                fig.update_layout(plot_bgcolor='white', paper_bgcolor='white')
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.dataframe(corr_matrix, use_container_width=True)
+                # Visualisation simple avec matplotlib
+                fig, ax = plt.subplots(figsize=(10, 8))
+                im = ax.imshow(corr_matrix, cmap='Blues', interpolation='none')
+                ax.set_xticks(range(len(numeric_cols)))
+                ax.set_yticks(range(len(numeric_cols)))
+                ax.set_xticklabels(numeric_cols, rotation=45, ha='right')
+                ax.set_yticklabels(numeric_cols)
+                plt.colorbar(im)
+                st.pyplot(fig)
+            
             st.markdown('</div>', unsafe_allow_html=True)
 
         # --- Téléchargement ---
@@ -376,33 +364,57 @@ if uploaded_file is not None:
         st.error(f"❌ Erreur lors du traitement des données : {str(e)}")
 
 else:
-    # --- Page d'accueil épurée ---
-    st.markdown("""
-    <div class="modern-card" style='text-align: center; padding: 3rem;'>
-        <h2 style='color: #2c3e50; margin-bottom: 1.5rem;'>📊 Bienvenue sur HevitraVizor+</h2>
-        <p style='font-size: 1.1rem; color: #7f8c8d; margin-bottom: 2rem; line-height: 1.6;'>
-            Votre plateforme d'analyse de données intuitive et professionnelle.<br>
-            Importez vos données et découvrez des insights précieux en quelques clics.
-        </p>
+    # --- Page d'accueil épurée et sécurisée ---
+    
+    # Container principal
+    with st.container():
+        st.markdown(
+            "<h1 style='text-align: center; color: #2c3e50; margin-bottom: 1rem;'>📊 HevitraVizor+</h1>",
+            unsafe_allow_html=True
+        )
+        st.markdown(
+            "<p style='text-align: center; color: #7f8c8d; font-size: 1.2rem; margin-bottom: 3rem;'>Votre plateforme d'analyse de données professionnelle</p>",
+            unsafe_allow_html=True
+        )
         
-        <div style='display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin: 2rem 0;'>
-            <div style='padding: 1.5rem; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #3498db;'>
-                <h4 style='color: #2c3e50; margin-bottom: 0.5rem;'>📁 Import simple</h4>
-                <p style='color: #7f8c8d; margin: 0;'>Support CSV et Excel</p>
-            </div>
-            <div style='padding: 1.5rem; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #2ecc71;'>
-                <h4 style='color: #2c3e50; margin-bottom: 0.5rem;'>📊 Visualisations avancées</h4>
-                <p style='color: #7f8c8d; margin: 0;'>Graphiques interactifs et clairs</p>
-            </div>
-            <div style='padding: 1.5rem; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #e74c3c;'>
-                <h4 style='color: #2c3e50; margin-bottom: 0.5rem;'>🔍 Analyse intelligente</h4>
-                <p style='color: #7f8c8d; margin: 0;'>Insights automatiques</p>
-            </div>
-        </div>
+        # Features en colonnes
+        col1, col2, col3 = st.columns(3)
         
-        <div style='margin-top: 2rem; padding: 1.5rem; background: #3498db; color: white; border-radius: 10px;'>
-            <h4 style='margin-bottom: 0.5rem;'>💡 Comment commencer ?</h4>
-            <p style='margin: 0; opacity: 0.9;'>Utilisez le panneau de gauche pour importer votre premier fichier de données !</p>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+        features = [
+            {"icon": "📁", "title": "Import simple", "desc": "Support CSV et Excel"},
+            {"icon": "📊", "title": "Visualisations", "desc": "Graphiques interactifs et clairs"},
+            {"icon": "🔍", "title": "Analyse intelligente", "desc": "Insights automatiques"}
+        ]
+        
+        for i, feature in enumerate(features):
+            with [col1, col2, col3][i]:
+                st.markdown(f"### {feature['icon']} {feature['title']}")
+                st.write(feature['desc'])
+        
+        st.markdown("---")
+        
+        # Call to action
+        st.success("💡 **Comment commencer ?** Utilisez le panneau de gauche pour importer votre premier fichier de données !")
+        
+        # Informations supplémentaires
+        with st.expander("📋 Formats de fichiers supportés"):
+            st.write("""
+            - **CSV** (.csv) - Fichiers texte séparés par des virgules
+            - **Excel** (.xlsx, .xls) - Feuilles de calcul Microsoft Excel
+            - **Taille maximale** : 200MB
+            """)
+        
+        with st.expander("🔧 Fonctionnalités disponibles"):
+            st.write("""
+            - 📈 **Analyse exploratoire** : Statistiques descriptives et métriques
+            - 🔍 **Filtrage avancé** : Filtrage interactif par colonnes et valeurs
+            - 📊 **Visualisations** : Graphiques interactifs et matrices de corrélation
+            - 💾 **Export** : Téléchargement des données analysées
+            """)
+
+# --- Footer ---
+st.markdown("---")
+st.markdown(
+    "<p style='text-align: center; color: #7f8c8d;'>HevitraVizor+ • Plateforme d'analyse de données</p>",
+    unsafe_allow_html=True
+)
